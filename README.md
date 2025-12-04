@@ -12,6 +12,12 @@ This architecture plugin provides support for the disassembling and lifting of I
 - Customizable DPP registers
 
 ## Installation
+### Binary Download
+The easiest way to use this plugin is to download and install a pre-compiled release binary.
+1. Dowload the shared library corresponding to your OS/arch from the latest [GitHub Release](https://github.com/idaholab/bn-st10-arch/releases)
+2. Copy the downloaded binary to your Binary Ninja plugin directory (e.g. `~/.binarynina/plygins/`)
+3. Start Binary Ninja
+
 ### Manual Build and Installation
 #### Prerequisites
 - Binary Ninja (minimum version: `5.1.8104`)
