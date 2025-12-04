@@ -1,0 +1,241 @@
+# .github/workflows/build.yml
+name: Build Plugin
+
+# This workflow was generated with the help of Claude
+
+on:
+  # Manual trigger with version input
+  workflow_dispatch:
+    inputs:
+      binja_api_tag:
+        description: 'Binary Ninja API tag (e.g., dev, personal, stable/5.2.8614)'
+        required: true
+        default: 'dev'
+  
+  # Scheduled check for new releases (daily at midnight UTC)
+  schedule:
+    - cron: '0 0 * * *'
+
+env:
+  REPO_NAME: bn-st10-arch
+
+jobs:
+  check-for-new-release:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      latest_tag: ${{ steps.check.outputs.latest_tag }}
+      release_name: ${{ steps.check.outputs.release_name }}
+      our_tag: ${{ steps.check.outputs.our_tag }}
+    steps:
+      - name: Check for new Binary Ninja stable release
+        id: check
+        run: |
+          # For manual dispatch, use the provided tag
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "latest_tag=${{ github.event.inputs.binja_api_tag }}" >> $GITHUB_OUTPUT
+            echo "release_name=${{ github.event.inputs.binja_api_tag }}" >> $GITHUB_OUTPUT
+            echo "our_tag=$(echo '${{ github.event.inputs.binja_api_tag }}' | tr '/' '-')" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Fetch latest stable release from binaryninja-api
+          RELEASE_INFO=$(curl -s https://api.github.com/repos/Vector35/binaryninja-api/releases \
+            | jq -r '[.[] | select(.name | startswith("stable/"))][0] // empty')
+          
+          if [ -z "$RELEASE_INFO" ] || [ "$RELEASE_INFO" = "null" ]; then
+            echo "No stable release found"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          RELEASE_NAME=$(echo "$RELEASE_INFO" | jq -r '.name')
+          RELEASE_TAG=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
+          
+          echo "Latest stable release: $RELEASE_NAME (tag: $RELEASE_TAG)"
+          echo "latest_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          
+          # Check if we already have a release for this version
+          # Sanitize the release name for use as a tag (replace / with -)
+          OUR_TAG=$(echo "$RELEASE_NAME" | tr '/' '-')
+          echo "our_tag=$OUR_TAG" >> $GITHUB_OUTPUT
+          
+          EXISTING=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$OUR_TAG")
+          
+          if [ "$EXISTING" = "200" ]; then
+            echo "Release already exists for $RELEASE_NAME"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "New release needed for $RELEASE_NAME"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check-for-new-release
+    if: needs.check-for-new-release.outputs.should_build == 'true'
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            ext: so
+            lib_prefix: lib
+            platform: linux_amd64
+          - os: macos-latest
+            ext: dylib
+            lib_prefix: lib
+            platform: macos_arm64
+          - os: macos-15-intel
+            ext: dylib
+            lib_prefix: lib
+            platform: macos_amd64
+          - os: windows-latest
+            ext: dll
+            lib_prefix: ""
+            platform: windows_amd64
+    
+    steps:
+      - name: Checkout plugin source
+        uses: actions/checkout@v4
+        with:
+          path: ${{ env.REPO_NAME }}
+      
+      - name: Checkout Binary Ninja API
+        uses: actions/checkout@v4
+        with:
+          repository: Vector35/binaryninja-api
+          ref: ${{ needs.check-for-new-release.outputs.latest_tag }}
+          path: binaryninja-api
+          submodules: recursive
+      
+      - name: Set up build environment (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+      
+      - name: Set up build environment (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake
+      
+      - name: Set up build environment (Windows)
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v2
+      
+      - name: Configure CMake structure
+        shell: bash
+        run: |
+          cd binaryninja-api
+          
+          # Add plugins subdirectory to main CMakeLists.txt
+          echo -e "\nadd_subdirectory(plugins)" >> CMakeLists.txt
+          
+          # Create plugins directory and CMakeLists.txt
+          mkdir -p plugins
+          echo -e "add_subdirectory(${{ env.REPO_NAME }})" > plugins/CMakeLists.txt
+          
+          # Move plugin source into place
+          mv ../${{ env.REPO_NAME }} plugins/${{ env.REPO_NAME }}
+      
+      - name: Build plugin
+        shell: bash
+        run: |
+          cd binaryninja-api
+          cmake -DCMAKE_BUILD_TYPE=Release -DHEADLESS=yes -DBN_ALLOW_STUBS=yes -B build .
+          cmake --build build --config Release --target ${{ env.REPO_NAME }} -j4
+      
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          
+          # Find and copy the built library (location varies by OS and build system)
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            # Windows/MSVC puts output in plugins subdirectory
+            cp binaryninja-api/build/plugins/${{ env.REPO_NAME }}/Release/${{ matrix.lib_prefix }}${{ env.REPO_NAME }}.${{ matrix.ext }} artifacts/ || \
+            cp binaryninja-api/build/out/bin/Release/${{ matrix.lib_prefix }}${{ env.REPO_NAME }}.${{ matrix.ext }} artifacts/ || \
+            cp binaryninja-api/build/out/bin/${{ matrix.lib_prefix }}${{ env.REPO_NAME }}.${{ matrix.ext }} artifacts/
+          else
+            cp binaryninja-api/build/out/bin/${{ matrix.lib_prefix }}${{ env.REPO_NAME }}.${{ matrix.ext }} artifacts/
+          fi
+      
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.REPO_NAME }}-${{ matrix.platform }}-${{ needs.check-for-new-release.outputs.our_tag }}
+          path: artifacts/
+          retention-days: 90
+
+  release:
+    needs: [check-for-new-release, build]
+    if: startsWith(needs.check-for-new-release.outputs.release_name, 'stable/')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: ${{ env.REPO_NAME }}-*
+      
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          
+          # Flatten and rename artifacts to include platform
+          for dir in artifacts/*/; do
+            platform=$(basename "$dir" | sed "s/${{ env.REPO_NAME }}-//" | sed "s/-${{ needs.check-for-new-release.outputs.our_tag }}//")
+            for file in "$dir"*; do
+              if [ -f "$file" ]; then
+                filename=$(basename "$file")
+                extension="${filename##*.}"
+                basename="${filename%.*}"
+                cp "$file" "release/${basename}-${platform}.${extension}"
+              fi
+            done
+          done
+          
+          # Create build info
+          echo "Binary Ninja API: ${{ needs.check-for-new-release.outputs.release_name }}" > release/BUILD_INFO.txt
+          echo "API Tag: ${{ needs.check-for-new-release.outputs.latest_tag }}" >> release/BUILD_INFO.txt
+          echo "Build date: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> release/BUILD_INFO.txt
+          echo "Commit: ${{ github.sha }}" >> release/BUILD_INFO.txt
+          
+          ls -la release/
+      
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat << 'EOF' > release_notes.md
+          Automated build of the ${{ env.REPO_NAME }} plugin for Binary Ninja.
+
+          **Compatible with:** Binary Ninja ${{ needs.check-for-new-release.outputs.release_name }}
+
+          ## Installation
+          1. Download the appropriate file for your platform:
+             - **Linux (x64):** `lib${{ env.REPO_NAME }}-linux_amd64.so`
+             - **macOS (Apple Silicon):** `lib${{ env.REPO_NAME }}-macos_arm64.dylib`
+             - **macOS (Intel):** `lib${{ env.REPO_NAME }}-macos_amd64.dylib`
+             - **Windows (x64):** `${{ env.REPO_NAME }}-windows_amd64.dll`
+          2. Copy to your Binary Ninja plugins folder:
+             - **Linux:** `~/.binaryninja/plugins/`
+             - **macOS:** `~/Library/Application Support/Binary Ninja/plugins/`
+             - **Windows:** `%APPDATA%\Binary Ninja\plugins\`
+          3. Restart Binary Ninja
+          EOF
+          
+          gh release create "${{ needs.check-for-new-release.outputs.our_tag }}" \
+            --title "${{ env.REPO_NAME }} for Binary Ninja ${{ needs.check-for-new-release.outputs.release_name }}" \
+            --notes-file release_notes.md \
+            release/*
