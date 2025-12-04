@@ -14,6 +14,11 @@
 #include "sfr.h"
 #include "util.h"
 
+// Enable nice function signature printing in windows for logs
+#ifdef _MSC_VER
+    #define __PRETTY_FUNCTION__ __FUNCSIG__
+#endif
+
 namespace BN = BinaryNinja;
 
 // Ref: https://clang.llvm.org/extra/clang-tidy/checks/modernize/avoid-bind.html
