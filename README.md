@@ -32,7 +32,7 @@ cd binaryninja-api
 
 # Set up CMake files
 echo -e "\nadd_subdirectory(plugins)" >> CMakeLists.txt
-echo -e "\nadd_subdirectory(c166)" >> plugins/CMakeLists.txt
+echo -e "\nadd_subdirectory(bn-st10-arch)" >> plugins/CMakeLists.txt
 
 # Download C166 architecture source
 cd plugins
