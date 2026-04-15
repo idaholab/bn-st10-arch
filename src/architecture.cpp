@@ -1537,26 +1537,62 @@ void apply_extr(BinaryNinja::BinaryView* view, uint64_t start,
   view->Reanalyze();
 }
 
-void apply_dpp(BinaryNinja::BinaryView* view, uint64_t start, uint64_t length) {
-  int64_t dpp0, dpp1, dpp2, dpp3;
+void apply_dpp_range(BinaryNinja::BinaryView* view, uint64_t start,
+                     uint64_t length) {
+  uint32_t current_dpps[4];
+  Instruction::GetDefaultDpps(current_dpps);
 
-  BN::GetIntegerInput(dpp0, std::string("Enter DPP0 value"),
-                      std::string("DPP0:"));
-  BN::GetIntegerInput(dpp1, std::string("Enter DPP1 value"),
-                      std::string("DPP1:"));
-  BN::GetIntegerInput(dpp2, std::string("Enter DPP2 value"),
-                      std::string("DPP2:"));
-  BN::GetIntegerInput(dpp3, std::string("Enter DPP3 value"),
-                      std::string("DPP3:"));
+  std::vector<BN::FormInputField> fields;
 
-  // Try to apply to all 2-byte addresses in the specified (highlighted range)
-  uint64_t a;
-  for (a = start; a < (start + length);) {
-    BN::LogInfo("Apply DPP values to address: 0x%lx", a);
-    Instruction::SetDpps(a, dpp0, dpp1, dpp2, dpp3);
-    a += 2;
+  auto startField = BN::FormInputField::Address("Start address", view, start);
+  startField.hasDefault = true;
+  startField.addressDefault = start;
+  fields.push_back(startField);
+
+  auto lengthField = BN::FormInputField::Integer("Length (bytes)");
+  lengthField.hasDefault = true;
+  lengthField.intDefault = static_cast<int64_t>(length);
+  fields.push_back(lengthField);
+
+  fields.push_back(BN::FormInputField::Separator());
+
+  for (int i = 0; i < 4; i++) {
+    auto f = BN::FormInputField::Integer("DPP" + std::to_string(i));
+    f.hasDefault = true;
+    f.intDefault = static_cast<int64_t>(current_dpps[i]);
+    fields.push_back(f);
   }
 
+  if (!BN::GetFormInput(fields, "Apply DPP (range)")) return;
+
+  uint64_t rangeStart = fields[0].addressResult;
+  int64_t rangeLength = fields[1].intResult;
+  if (rangeLength <= 0) return;
+
+  uint64_t rangeEnd = rangeStart + static_cast<uint64_t>(rangeLength) - 2;
+
+  Instruction::SetDppsRange(rangeStart, rangeEnd, fields[3].intResult,
+                            fields[4].intResult, fields[5].intResult,
+                            fields[6].intResult);
+  view->Reanalyze();
+}
+
+void apply_dpp_global(BinaryNinja::BinaryView* view) {
+  uint32_t current_dpps[4];
+  Instruction::GetDefaultDpps(current_dpps);
+
+  std::vector<BN::FormInputField> fields;
+  for (int i = 0; i < 4; i++) {
+    auto f = BN::FormInputField::Integer("DPP" + std::to_string(i));
+    f.hasDefault = true;
+    f.intDefault = static_cast<int64_t>(current_dpps[i]);
+    fields.push_back(f);
+  }
+
+  if (!BN::GetFormInput(fields, "Apply DPP (global)")) return;
+
+  Instruction::SetDefaultDpps(fields[0].intResult, fields[1].intResult,
+                              fields[2].intResult, fields[3].intResult);
   view->Reanalyze();
 }
 
@@ -1630,27 +1666,33 @@ BINARYNINJAPLUGIN bool CorePluginInit() {
   // Register plugin commands to support manual identification of EXT/DPP values
   // for instruction lifting
   BN::PluginCommand::RegisterForRange(
-      "Apply EXTP #pag10",
+      "C166 Architecture\\Apply EXTP #pag10",
       "Highlight a range of instructions to apply EXTP #pag10 value to.",
       &C166::apply_extp_pag10, &C166::func_is_valid);
 
   BN::PluginCommand::RegisterForRange(
-      "Apply EXTS #seg8",
+      "C166 Architecture\\Apply EXTS #seg8",
       "Highlight a range of instructions to apply EXTS #seg8 value to.",
       &C166::apply_exts_seg8, &C166::func_is_valid);
 
   BN::PluginCommand::RegisterForRange(
-      "Apply EXTR", "Highlight a range of instructions to apply EXTR to.",
-      &C166::apply_extr, &C166::func_is_valid);
+      "C166 Architecture\\Apply EXTR",
+      "Highlight a range of instructions to apply EXTR to.", &C166::apply_extr,
+      &C166::func_is_valid);
 
   BN::PluginCommand::RegisterForRange(
-      "Apply DPP",
-      "Highlight a range of instructions to apply specific DPP values to.",
-      &C166::apply_dpp, &C166::func_is_valid);
+      "C166 Architecture\\Apply DPP (range)",
+      "Apply specific DPP values to a range of instructions.",
+      &C166::apply_dpp_range, &C166::func_is_valid);
 
-  // Assign Default DPP values
-  uint32_t dpp[] = {0x0, 0x0, 0x0, 0x0};
+  // Assign Default DPP values (hardware reset values)
+  uint32_t dpp[] = {0x0, 0x1, 0x2, 0x3};
   C166::Instruction::SetDefaultDpps(dpp[0], dpp[1], dpp[2], dpp[3]);
+
+  BN::PluginCommand::Register(
+      "C166 Architecture\\Apply DPP (global)",
+      "Set default DPP values for all instructions in the binary.",
+      &C166::apply_dpp_global);
 
   BN::PluginCommand::Register(
       "C166 Architecture\\Save C166 StateMap",

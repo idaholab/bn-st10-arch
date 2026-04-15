@@ -32,7 +32,7 @@ namespace C166 {
 //     disassembly (text).
 std::unordered_map<uint64_t, InstructionState> StateMap;
 std::mutex StateMapMutex;
-uint32_t default_dpp[4] = {0x0000, 0x0000, 0x0000, 0x0000};  // Reset Value(s)
+uint32_t default_dpp[4] = {0x0000, 0x0001, 0x0002, 0x0003};  // Reset Value(s)
 
 // Default Constructor
 InstructionState::InstructionState() {
@@ -52,6 +52,13 @@ void Instruction::SetDefaultDpps(uint16_t dpp0, uint16_t dpp1, uint16_t dpp2,
   default_dpp[1] = dpp1;
   default_dpp[2] = dpp2;
   default_dpp[3] = dpp3;
+}
+
+void Instruction::GetDefaultDpps(uint32_t* dpps) {
+  dpps[0] = default_dpp[0];
+  dpps[1] = default_dpp[1];
+  dpps[2] = default_dpp[2];
+  dpps[3] = default_dpp[3];
 }
 
 // Assumes DPP usage implies no EXT sequence active.
@@ -82,22 +89,22 @@ void Instruction::SetDpps(uint64_t addr, uint16_t dpp0, uint16_t dpp1,
 // Sets DPP values in a range if no EXT sequence detected.
 void Instruction::SetDppsRange(uint64_t start, uint64_t end, uint16_t dpp0,
                                uint16_t dpp1, uint16_t dpp2, uint16_t dpp3) {
-  // BN::LogInfo("util.cpp: SetDpps: addr=0x%lx", addr);
   std::lock_guard<std::mutex> guard(StateMapMutex);
 
   for (auto addr = start; addr <= end; addr += 2) {
     auto it = StateMap.find(addr);
-    // Only set DPP if we are not in an EXT sequence
-    if (it != StateMap.end() &&
-        (StateMap[addr].ext_state == ExtNoneCustomDpps ||
-         StateMap[addr].ext_state == ExtNone)) {
-      StateMap[addr].ext_state = ExtNoneCustomDpps;
-      StateMap[addr].dpp[0] = dpp0;
-      StateMap[addr].dpp[1] = dpp1;
-      StateMap[addr].dpp[2] = dpp2;
-      StateMap[addr].dpp[3] = dpp3;
+    if (it != StateMap.end()) {
+      // Only overwrite if no EXT sequence is active
+      if (it->second.ext_state == ExtNoneCustomDpps ||
+          it->second.ext_state == ExtNone) {
+        it->second.ext_state = ExtNoneCustomDpps;
+        it->second.dpp[0] = dpp0;
+        it->second.dpp[1] = dpp1;
+        it->second.dpp[2] = dpp2;
+        it->second.dpp[3] = dpp3;
+      }
     } else {
-      // Insert new element
+      // Address not in map, insert new element
       InstructionState new_insn_state;
       new_insn_state.ext_state = ExtNoneCustomDpps;
       new_insn_state.dpp[0] = dpp0;
