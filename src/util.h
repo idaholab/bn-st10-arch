@@ -60,6 +60,7 @@ class Instruction {
 
   static void SetDefaultDpps(uint16_t dpp0, uint16_t dpp1, uint16_t dpp2,
                              uint16_t dpp3);
+  static void GetDefaultDpps(uint32_t *dpps);
   static void SetDpps(uint64_t addr, uint16_t dpp0, uint16_t dpp1,
                       uint16_t dpp2, uint16_t dpp3);
   static void SetDppsRange(uint64_t start, uint64_t end, uint16_t dpp0,
