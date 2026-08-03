@@ -705,6 +705,22 @@ bool Calls::Lift(BN::Architecture *arch, const uint8_t *data,
   return true;
 }
 
+bool Pcall::Lift(const uint8_t *data, const uint64_t addr, size_t &len,
+                 BN::LowLevelILFunction &il) {
+  const auto reg = Instruction::TranslateReg(
+      addr, Instruction::GetRegShortAddr(data, length));
+  const auto value =
+      reg <= 0xF ? il.Register(2, reg) : il.Load(2, il.Const(3, reg));
+
+  il.AddInstruction(il.Push(2, value, flags));
+  il.AddInstruction(il.Call(il.ConstPointer(3, GetTarget(data, addr, length))));
+
+  len = length;
+  UpdateExtSequence(addr, len);
+
+  return true;
+}
+
 bool Cmp::Lift(const uint8_t op, const uint8_t *data, const uint64_t addr,
                size_t &len, BN::LowLevelILFunction &il) {
   switch (op) {

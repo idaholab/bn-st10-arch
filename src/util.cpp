@@ -1116,6 +1116,11 @@ uint32_t Calls::GetTarget(const uint8_t* data, const size_t len) {
   return (static_cast<uint32_t>(seg) << 16u) | caddr;
 }
 
+uint32_t Pcall::GetTarget(const uint8_t* data, const uint64_t addr,
+                          const size_t len) {
+  return (addr & 0xFF0000u) | Instruction::GetOpCaddr(data, len);
+}
+
 const char* Extprs::GetInstruction(const uint8_t* data, uint64_t addr,
                                    const size_t len) {
   const uint16_t instr = *(const uint16_t*)data;

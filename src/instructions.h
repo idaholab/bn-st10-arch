@@ -273,6 +273,20 @@ class Calls {
                    std::vector<BN::InstructionTextToken>& result);
 };
 
+class Pcall {
+  static constexpr size_t length = 4;
+  static constexpr uint32_t flags = Flags::WRITE_EZN;
+  static uint32_t GetTarget(const uint8_t* data, uint64_t addr, size_t len);
+
+ public:
+  static bool Info(const uint8_t* data, uint64_t addr, size_t maxLen,
+                   BN::InstructionInfo& result);
+  static bool Lift(const uint8_t* data, uint64_t addr, size_t& len,
+                   BN::LowLevelILFunction& il);
+  static bool Text(const uint8_t* data, uint64_t addr, size_t& len,
+                   std::vector<BN::InstructionTextToken>& result);
+};
+
 class Cmp {
   static constexpr uint32_t flags = Flags::WRITE_ALL;
 
