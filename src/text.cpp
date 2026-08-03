@@ -611,6 +611,31 @@ bool Calls::Text(const uint8_t* data, const uint64_t addr, size_t& len,
   return true;
 }
 
+bool Pcall::Text(const uint8_t* data, const uint64_t addr, size_t& len,
+                 std::vector<BN::InstructionTextToken>& result) {
+  char buf[32];
+  const auto reg = Instruction::TranslateReg(
+      addr, Instruction::GetRegShortAddr(data, length));
+  const auto target = GetTarget(data, addr, length);
+
+  ITEXT("pcall")
+
+  if (reg <= 0xF) {
+    std::snprintf(buf, sizeof(buf), "%s", Instruction::RegToStr(reg));
+    result.emplace_back(RegisterToken, buf, reg);
+  } else {
+    std::snprintf(buf, sizeof(buf), "0x%x", reg);
+    result.emplace_back(PossibleAddressToken, buf, reg);
+  }
+  result.emplace_back(OperandSeparatorToken, ", ");
+
+  std::snprintf(buf, sizeof(buf), "0x%x", target);
+  result.emplace_back(PossibleAddressToken, buf, target, 3);
+
+  len = length;
+  return true;
+}
+
 bool Cmp::Text(const uint8_t op, const uint8_t* data, const uint64_t addr,
                size_t& len, std::vector<BN::InstructionTextToken>& result) {
   switch (op) {
@@ -1387,7 +1412,7 @@ bool Mov::TextxC4(const uint8_t* data, const uint64_t addr, size_t& len,
   result.emplace_back(RegisterToken, buf, rwm);
   result.emplace_back(OperandSeparatorToken, "+#");
   std::snprintf(buf, sizeof(buf), "0x%x", data16);
-  result.emplace_back(RegisterToken, buf, data16);
+  result.emplace_back(IntegerToken, buf, data16);
   result.emplace_back(OperandSeparatorToken, "], ");
 
   std::snprintf(buf, sizeof(buf), "%s", Instruction::RegToStr(rwn));
@@ -1438,7 +1463,7 @@ bool Mov::TextxD4(const uint8_t* data, const uint64_t addr, size_t& len,
   result.emplace_back(OperandSeparatorToken, "+#");
 
   std::snprintf(buf, sizeof(buf), "0x%x", data16);
-  result.emplace_back(RegisterToken, buf, data16);
+  result.emplace_back(IntegerToken, buf, data16);
   result.emplace_back(TextToken, "]");
 
   len = 4;

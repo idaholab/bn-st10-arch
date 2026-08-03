@@ -552,7 +552,7 @@ bool C166Architecture::GetInstructionInfo(const uint8_t* data,
     case Opcodes::JNBS:
       return Jnbs::Info(data, addr, maxLen, result);
     case Opcodes::PCALL:
-      return false;
+      return Pcall::Info(data, addr, maxLen, result);
     case Opcodes::RET:
     case Opcodes::RETP:
     case Opcodes::RETS:
@@ -946,8 +946,7 @@ bool C166Architecture::GetInstructionLowLevelIL(const uint8_t* data,
     case Opcodes::JNBS:
       return Jnbs::Lift(this, data, addr, len, il);
     case Opcodes::PCALL:
-      // TODO: BRANCH
-      return false;
+      return Pcall::Lift(data, addr, len, il);
     case Opcodes::RET:
       return Ret::Lift(data, addr, len, il);
     case Opcodes::RETP:
@@ -1342,7 +1341,7 @@ bool C166Architecture::GetInstructionText(
     case Opcodes::JNBS:
       return Jnbs::Text(data, addr, len, result);
     case Opcodes::PCALL:
-      return false;
+      return Pcall::Text(data, addr, len, result);
     case Opcodes::RET:
       return Ret::Text(data, addr, len, result);
     case Opcodes::RETP:

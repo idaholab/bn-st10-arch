@@ -58,6 +58,15 @@ bool Calls::Info(const uint8_t* data, const uint64_t addr, const size_t maxLen,
   return true;
 }
 
+bool Pcall::Info(const uint8_t* data, const uint64_t addr, const size_t maxLen,
+                 BN::InstructionInfo& result) {
+  if (maxLen < length) return false;
+
+  result.AddBranch(CallDestination, GetTarget(data, addr, length));
+  result.length = length;
+  return true;
+}
+
 bool Jb::Info(const uint8_t* data, const uint64_t addr, const size_t maxLen,
               BN::InstructionInfo& result) {
   const auto target = GetTarget(data, addr, length);

@@ -344,10 +344,11 @@ BN::ExprId Instruction::GetIndAddrExpr_Extp_Rw_data16(
     BN::LowLevelILFunction& il, uint32_t pag10, uint32_t Rw, uint16_t data16) {
   const BN::ExprId IndAddrPag10 =
       il.ShiftLeft(3, il.Const(3, pag10), il.Const(2, 14));
-  const BN::ExprId IndAddrOff =
+  const BN::ExprId LongAddr =
       il.And(2, il.Add(2, il.Register(2, Rw), il.Const(2, data16)),
              il.Const(2, 0xFFFF));
-  const BN::ExprId IndAddr = il.Or(3, IndAddrPag10, IndAddrOff);
+  const BN::ExprId PageOffset = il.And(2, LongAddr, il.Const(2, 0x3FFF));
+  const BN::ExprId IndAddr = il.Or(3, IndAddrPag10, PageOffset);
   return IndAddr;
 }
 
@@ -1113,6 +1114,11 @@ uint32_t Calls::GetTarget(const uint8_t* data, const size_t len) {
   const uint8_t seg = Instruction::GetOpSeg(data, len);
   const uint16_t caddr = Instruction::GetOpCaddr(data, len);
   return (static_cast<uint32_t>(seg) << 16u) | caddr;
+}
+
+uint32_t Pcall::GetTarget(const uint8_t* data, const uint64_t addr,
+                          const size_t len) {
+  return (addr & 0xFF0000u) | Instruction::GetOpCaddr(data, len);
 }
 
 const char* Extprs::GetInstruction(const uint8_t* data, uint64_t addr,
