@@ -1582,7 +1582,7 @@ bool Mov::LiftxD4(const uint8_t *data, const uint64_t addr, size_t &len,
     SrcIndAddr = Instruction::GetIndAddrExpr_Rw_data16(il, rwm, data16);
   }
 
-  il.AddInstruction(il.Store(2, il.Register(2, rwn), SrcIndAddr, flags));
+  il.AddInstruction(il.SetRegister(2, rwn, il.Load(2, SrcIndAddr), flags));
 
   len = 4;
   UpdateExtSequence(addr, len);

@@ -1387,7 +1387,7 @@ bool Mov::TextxC4(const uint8_t* data, const uint64_t addr, size_t& len,
   result.emplace_back(RegisterToken, buf, rwm);
   result.emplace_back(OperandSeparatorToken, "+#");
   std::snprintf(buf, sizeof(buf), "0x%x", data16);
-  result.emplace_back(RegisterToken, buf, data16);
+  result.emplace_back(IntegerToken, buf, data16);
   result.emplace_back(OperandSeparatorToken, "], ");
 
   std::snprintf(buf, sizeof(buf), "%s", Instruction::RegToStr(rwn));
@@ -1438,7 +1438,7 @@ bool Mov::TextxD4(const uint8_t* data, const uint64_t addr, size_t& len,
   result.emplace_back(OperandSeparatorToken, "+#");
 
   std::snprintf(buf, sizeof(buf), "0x%x", data16);
-  result.emplace_back(RegisterToken, buf, data16);
+  result.emplace_back(IntegerToken, buf, data16);
   result.emplace_back(TextToken, "]");
 
   len = 4;
