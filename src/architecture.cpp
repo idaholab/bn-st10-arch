@@ -1608,8 +1608,10 @@ void save_state_map(const BinaryNinja::BinaryView* view) {
   BNMetadata* state_metadata = BNCreateMetadataRawData(buffer, buffer_size);
   free(buffer);
 
-  BNBinaryViewStoreMetadata(view->m_object, "c166_state", state_metadata,
-                            false);
+  BNBinaryViewStoreMetadata(
+      view->m_object, "c166_state", state_metadata,
+      static_cast<BNMetadataStoreFlag>(
+          MetadataStorePersistent | MetadataStoreMarksAnalysisChanged));
 }
 
 void load_state_map(BinaryNinja::BinaryView* view) {
